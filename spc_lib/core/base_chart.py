@@ -3,16 +3,8 @@ from abc import ABC, abstractmethod
 
 
 class BaseControlChart(ABC):
-    def __init__(self, data, datetimes=None):
-        """
-        Parameters
-        ----------
-        data : array-like
-            Двумерный массив (n_subgroups × subgroup_size).
 
-        datetimes : array-like, optional
-            Метки времени для оси X.
-        """
+    def __init__(self, data, datetimes=None):
 
         self.data = np.asarray(data)
 
@@ -29,33 +21,37 @@ class BaseControlChart(ABC):
         else:
             self.datetimes = np.asarray(datetimes)[:self.n_subgroups]
 
-        # X-bar
+        # Основной график
         self.stat_main = None
         self.cl_main = None
         self.ucl_main = None
         self.lcl_main = None
 
-        # R или s
+        # Второй график
         self.stat_disp = None
         self.cl_disp = None
         self.ucl_disp = None
         self.lcl_disp = None
 
+        # Подписи
+        self.main_label = None
+        self.disp_label = None
+
     @abstractmethod
-    def fit(self, baseline_mask=None, method="classic"):
+    def fit(self, baseline_mask=None, method='classic'):
         pass
 
-    def plot(self, **kwargs):
-        """
-        Построение контрольной карты.
-        """
-        from spc_lib.visualization import plot_control_chart
+    def plot(
+            self,
+            start=None,
+            end=None,
+            last_n=30):
 
-        return plot_control_chart(self, **kwargs)
+        from spc_lib.visualization.plotly_engine import plot_control_chart
 
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}"
-            f"(n_subgroups={self.n_subgroups}, "
-            f"subgroup_size={self.subgroup_size})"
+        return plot_control_chart(
+            self,
+            start=start,
+            end=end,
+            last_n=last_n
         )

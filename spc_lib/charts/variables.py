@@ -15,6 +15,11 @@ SPC_CONSTANTS = {
 }
 
 class XBarRChart(BaseControlChart):
+    def __init__(self, data, datetimes=None):
+        super().__init__(data, datetimes)
+        self.main_label = "X-bar: Средние значения подгрупп"
+        self.disp_label = "R: Размах в подгруппах"
+
     def fit(self, baseline_mask=None, method='classic'):
         if baseline_mask is None:
             baseline_mask = np.ones(self.n_subgroups, dtype=bool)
@@ -88,6 +93,11 @@ class XBarRChart(BaseControlChart):
         return self
 
 class XBarSChart(BaseControlChart):
+    def __init__(self, data, datetimes=None):
+        super().__init__(data, datetimes)
+        self.main_label = "X-bar: Средние значения подгрупп"
+        self.disp_label = "S: Стандартное отклонение в подгруппах"
+
     def fit(self, baseline_mask=None, method='classic'):
         if baseline_mask is None:
             baseline_mask = np.ones(self.n_subgroups, dtype=bool)
@@ -128,6 +138,10 @@ class XBarSChart(BaseControlChart):
         return self
 
 class IMRChart(BaseControlChart):
+    def __init__(self, data, datetimes=None):
+        super().__init__(data, datetimes)
+        self.main_label = "I: Индивидуальные значения"
+        self.disp_label = "MR: Скользящий размах"
 
     def fit(self, baseline_mask=None, method='classic'):
 

@@ -1,7 +1,6 @@
 import numpy as np
 import plotly.graph_objects as go
 
-# Цвета
 COLOR_SBER_GREEN = "#21a358"
 COLOR_SBER_RED = "#dc3545"
 COLOR_CL = "#999999"
@@ -16,6 +15,11 @@ def _plot_single_chart(
         title):
 
     stats = np.asarray(stats)
+
+    valid = ~np.isnan(stats)
+
+    stats = stats[valid]
+    dates = dates[valid]
 
     violations = (stats > ucl) | (stats < lcl)
 
@@ -43,8 +47,8 @@ def _plot_single_chart(
                 color=COLOR_SBER_RED,
                 width=2.5
             ),
-            hoverinfo="skip",
-            showlegend=False
+            showlegend=False,
+            hoverinfo='skip'
         )
     )
 
@@ -58,8 +62,8 @@ def _plot_single_chart(
                 color=COLOR_SBER_RED,
                 width=2.5
             ),
-            hoverinfo="skip",
-            showlegend=False
+            showlegend=False,
+            hoverinfo='skip'
         )
     )
 
@@ -72,19 +76,19 @@ def _plot_single_chart(
             line=dict(
                 color=COLOR_CL,
                 width=2,
-                dash="dash"
+                dash='dash'
             ),
-            hoverinfo="skip",
-            showlegend=False
+            showlegend=False,
+            hoverinfo='skip'
         )
     )
 
-    # Основная линия
+    # Данные
     fig.add_trace(
         go.Scatter(
             x=dates,
             y=stats,
-            mode="lines+markers",
+            mode='lines+markers',
             line=dict(
                 color=COLOR_SBER_GREEN,
                 width=3.5
@@ -93,7 +97,7 @@ def _plot_single_chart(
                 color=marker_colors,
                 size=marker_sizes,
                 line=dict(
-                    color="white",
+                    color='white',
                     width=2
                 )
             ),
@@ -109,12 +113,14 @@ def _plot_single_chart(
         height=450,
         title=dict(
             text=f"<b>{title}</b>",
-            x=0.5,
-            xanchor="center"
+            x=0.5
         ),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-        hovermode="x unified",
+
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+
+        hovermode='x unified',
+
         margin=dict(
             l=60,
             r=30,
@@ -128,7 +134,6 @@ def _plot_single_chart(
         zeroline=False,
         showline=True,
         linecolor="#E0E0E0",
-        linewidth=1,
         tickfont=dict(
             color="#A0A0A0",
             size=12
@@ -142,7 +147,6 @@ def _plot_single_chart(
         zeroline=False,
         showline=True,
         linecolor="#E0E0E0",
-        linewidth=1,
         tickfont=dict(
             color="#A0A0A0",
             size=12
@@ -167,26 +171,34 @@ def plot_control_chart(
         mask = dates <= np.datetime64(end)
 
     else:
-        mask = np.arange(len(dates)) >= max(0, len(dates) - last_n)
+        mask = np.arange(len(dates)) >= (
+            len(dates) - last_n
+        )
 
-    # X-bar
-    fig_xbar = _plot_single_chart(
+    # Основной график
+    fig_main = _plot_single_chart(
+
         dates[mask],
         np.asarray(chart.stat_main)[mask],
         chart.ucl_main,
         chart.cl_main,
         chart.lcl_main,
-        "График средних (X-bar)"
+        chart.main_label
     )
 
-    # R
-    fig_r = _plot_single_chart(
+    # Второй график?
+    if chart.stat_disp is None:
+        return fig_main
+
+    fig_disp = _plot_single_chart(
+
         dates[mask],
         np.asarray(chart.stat_disp)[mask],
         chart.ucl_disp,
         chart.cl_disp,
         chart.lcl_disp,
-        "График размаха (R)"
+
+        chart.disp_label
     )
 
-    return fig_xbar, fig_r
+    return fig_main, fig_disp
