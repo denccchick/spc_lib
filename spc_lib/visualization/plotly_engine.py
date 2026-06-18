@@ -1,9 +1,7 @@
 import numpy as np
 import plotly.graph_objects as go
 
-# ==========================================
 # Цвета
-# ==========================================
 COLOR_SBER_GREEN = "#21a358"
 COLOR_SBER_RED = "#dc3545"
 COLOR_CL = "#999999"
