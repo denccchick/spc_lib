@@ -4,7 +4,6 @@ from datetime import datetime
 
 
 class _WesternElectricRules:
-    """Приватный класс. Не использовать напрямую."""
 
     def __init__(self, data: np.ndarray, center: float, sigma: float):
         self.data = np.asarray(data)
