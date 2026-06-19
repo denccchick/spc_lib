@@ -7,6 +7,8 @@ from spc_lib.rules import detect_violations
 COLOR_MAIN = "#21a358"
 COLOR_RED = "#dc3545"
 COLOR_CL = "#999999"
+COLOR_TARGET = "#121111"
+COLOR_SPEC = "#FF0000"
 
 RULE_COLORS = {
     1: '#FF0000', 2: '#FF6B00', 3: '#FFD700', 4: '#32CD32',
@@ -25,7 +27,7 @@ RULE_NAMES = {
 }
 
 
-def _plot_single_chart(dates, stats, ucl, cl, lcl, title):
+def _plot_single_chart(dates, stats, ucl, cl, lcl, title, target=None, usl=None, lsl=None, show_spec=False):
     stats = np.asarray(stats)
     valid = ~np.isnan(stats)
     stats = stats[valid]
@@ -38,18 +40,48 @@ def _plot_single_chart(dates, stats, ucl, cl, lcl, title):
 
     fig = go.Figure()
 
+    # UCL
     fig.add_trace(go.Scatter(
         x=dates, y=[ucl] * len(dates), mode="lines",
         line=dict(color=COLOR_RED, width=2.5), showlegend=False, hoverinfo='skip'
     ))
+
+    # LCL
     fig.add_trace(go.Scatter(
         x=dates, y=[lcl] * len(dates), mode="lines",
         line=dict(color=COLOR_RED, width=2.5), showlegend=False, hoverinfo='skip'
     ))
+
+    # CL
     fig.add_trace(go.Scatter(
         x=dates, y=[cl] * len(dates), mode="lines",
         line=dict(color=COLOR_CL, width=2, dash='dash'), showlegend=False, hoverinfo='skip'
     ))
+
+    # TARGET (если задан)
+    if target is not None:
+        fig.add_trace(go.Scatter(
+            x=dates, y=[target] * len(dates), mode="lines",
+            line=dict(color=COLOR_TARGET, width=2, dash='dot'),
+            name='Target'
+        ))
+
+    # USL/LSL (если заданы и show_spec=True)
+    if show_spec:
+        if usl is not None:
+            fig.add_trace(go.Scatter(
+                x=dates, y=[usl] * len(dates), mode="lines",
+                line=dict(color=COLOR_SPEC, width=2, dash='dashdot'),
+                name='USL'
+            ))
+        if lsl is not None:
+            fig.add_trace(go.Scatter(
+                x=dates, y=[lsl] * len(dates), mode="lines",
+                line=dict(color=COLOR_SPEC, width=2, dash='dashdot'),
+                name='LSL'
+            ))
+
+    # Основная статистика
     fig.add_trace(go.Scatter(
         x=dates, y=stats, mode='lines+markers',
         line=dict(color=COLOR_MAIN, width=3.5),
@@ -71,7 +103,7 @@ def _plot_single_chart(dates, stats, ucl, cl, lcl, title):
     return fig
 
 
-def plot_control_chart(chart, start=None, end=None, last_n=30):
+def plot_control_chart(chart, start=None, end=None, last_n=30, show_spec=False):
     dates = np.asarray(chart.datetimes)
 
     if start is not None:
@@ -85,7 +117,11 @@ def plot_control_chart(chart, start=None, end=None, last_n=30):
         dates[mask],
         np.asarray(chart.stat_main)[mask],
         chart.ucl_main, chart.cl_main, chart.lcl_main,
-        chart.main_label
+        chart.main_label,
+        target=chart.target,
+        usl=chart.usl,
+        lsl=chart.lsl,
+        show_spec=show_spec
     )
 
     if chart.stat_disp is None:
@@ -95,13 +131,17 @@ def plot_control_chart(chart, start=None, end=None, last_n=30):
         dates[mask],
         np.asarray(chart.stat_disp)[mask],
         chart.ucl_disp, chart.cl_disp, chart.lcl_disp,
-        chart.disp_label
+        chart.disp_label,
+        target=None,
+        usl=None,
+        lsl=None,
+        show_spec=False
     )
 
     return fig_main, fig_disp
 
 
-def plot_rules_violations(chart, start=None, end=None, last_n=30, rules=None, n_cols=2):
+def plot_rules_violations(chart, start=None, end=None, last_n=30, rules=None, n_cols=2, show_spec=False):
     dates = np.asarray(chart.datetimes)
 
     if start is not None:
@@ -176,20 +216,46 @@ def plot_rules_violations(chart, start=None, end=None, last_n=30, rules=None, n_
         marker_colors_rule = np.where(rule_violations, RULE_COLORS.get(rule_num, COLOR_RED), COLOR_MAIN)
         marker_sizes_rule = np.where(rule_violations, 14, 10)
 
+        # UCL
         fig.add_trace(go.Scatter(
             x=dates_plot, y=[chart.ucl_main] * n_points, mode="lines",
             line=dict(color=COLOR_RED, width=2.5), showlegend=False, hoverinfo='skip'
         ), row=row, col=col)
 
+        # LCL
         fig.add_trace(go.Scatter(
             x=dates_plot, y=[chart.lcl_main] * n_points, mode="lines",
             line=dict(color=COLOR_RED, width=2.5), showlegend=False, hoverinfo='skip'
         ), row=row, col=col)
 
+        # CL
         fig.add_trace(go.Scatter(
             x=dates_plot, y=[chart.cl_main] * n_points, mode="lines",
             line=dict(color=COLOR_CL, width=2, dash='dash'), showlegend=False, hoverinfo='skip'
         ), row=row, col=col)
+
+        # Target (если задан)
+        if chart.target is not None:
+            fig.add_trace(go.Scatter(
+                x=dates_plot, y=[chart.target] * n_points, mode="lines",
+                line=dict(color=COLOR_TARGET, width=2, dash='dot'),
+                showlegend=False, hoverinfo='skip'
+            ), row=row, col=col)
+
+        # USL/LSL (если заданы и show_spec=True)
+        if show_spec:
+            if chart.usl is not None:
+                fig.add_trace(go.Scatter(
+                    x=dates_plot, y=[chart.usl] * n_points, mode="lines",
+                    line=dict(color=COLOR_SPEC, width=2, dash='dashdot'),
+                    showlegend=False, hoverinfo='skip'
+                ), row=row, col=col)
+            if chart.lsl is not None:
+                fig.add_trace(go.Scatter(
+                    x=dates_plot, y=[chart.lsl] * n_points, mode="lines",
+                    line=dict(color=COLOR_SPEC, width=2, dash='dashdot'),
+                    showlegend=False, hoverinfo='skip'
+                ), row=row, col=col)
 
         fig.add_trace(go.Scatter(
             x=dates_plot, y=stats, mode='lines+markers',
@@ -218,7 +284,6 @@ def plot_rules_violations(chart, start=None, end=None, last_n=30, rules=None, n_
 
         rule_idx += 1
 
-    # Высота: минимум 400 на ряд
     height = max(400, 400 * n_rows)
 
     fig.update_layout(

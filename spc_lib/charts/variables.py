@@ -15,8 +15,8 @@ SPC_CONSTANTS = {
 }
 
 class XBarRChart(BaseControlChart):
-    def __init__(self, data, datetimes=None):
-        super().__init__(data, datetimes)
+    def __init__(self, data, datetimes=None, target=None, usl=None, lsl=None):
+        super().__init__(data, datetimes, target, usl, lsl)
         self.main_label = "X-bar: Средние значения подгрупп"
         self.disp_label = "R: Размах в подгруппах"
 
@@ -93,8 +93,8 @@ class XBarRChart(BaseControlChart):
         return self
 
 class XBarSChart(BaseControlChart):
-    def __init__(self, data, datetimes=None):
-        super().__init__(data, datetimes)
+    def __init__(self, data, datetimes=None, target=None, usl=None, lsl=None):
+        super().__init__(data, datetimes, target, usl, lsl)
         self.main_label = "X-bar: Средние значения подгрупп"
         self.disp_label = "S: Стандартное отклонение в подгруппах"
 
@@ -138,8 +138,8 @@ class XBarSChart(BaseControlChart):
         return self
 
 class IMRChart(BaseControlChart):
-    def __init__(self, data, datetimes=None):
-        super().__init__(data, datetimes)
+    def __init__(self, data, datetimes=None, target=None, usl=None, lsl=None):
+        super().__init__(data, datetimes, target, usl, lsl)
         self.main_label = "I: Индивидуальные значения"
         self.disp_label = "MR: Скользящий размах"
 
@@ -148,19 +148,13 @@ class IMRChart(BaseControlChart):
         if baseline_mask is None:
             baseline_mask = np.ones(self.n_subgroups, dtype=bool)
 
-        # Если в строке несколько измерений —
-        # усредняем их и получаем индивидуальные наблюдения
         x = np.mean(self.data, axis=1)
-
-        # Moving Range
         mr = np.abs(np.diff(x))
 
         self.stat_main = x
         self.stat_disp = np.concatenate(([np.nan], mr))
 
         base_x = x[baseline_mask]
-
-        # для MR первая точка отсутствует
         mr_mask = baseline_mask[1:] & baseline_mask[:-1]
         base_mr = mr[mr_mask]
 

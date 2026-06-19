@@ -3,9 +3,12 @@ from typing import Optional, List
 
 
 class BaseControlChart:
-    def __init__(self, data, datetimes=None):
+    def __init__(self, data, datetimes=None, target=None, usl=None, lsl=None):
         self.data = np.asarray(data)
         self.datetimes = np.asarray(datetimes) if datetimes is not None else None
+        self.target = target
+        self.usl = usl
+        self.lsl = lsl
         self.n_subgroups = len(data)
         self.subgroup_size = data.shape[1] if data.ndim > 1 else 1
 
@@ -37,10 +40,10 @@ class BaseControlChart:
         else:
             return np.arange(len(dates)) >= (len(dates) - last_n)
 
-    def plot(self, start=None, end=None, last_n=30):
+    def plot(self, start=None, end=None, last_n=30, show_spec=False):
         from spc_lib.visualization import plot_control_chart
-        return plot_control_chart(self, start, end, last_n)
+        return plot_control_chart(self, start, end, last_n, show_spec)
 
-    def plot_rules(self, start=None, end=None, last_n=30, rules=None, n_cols=1):
+    def plot_rules(self, start=None, end=None, last_n=30, rules=None, n_cols=1, show_spec=False):
         from spc_lib.visualization import plot_rules_violations
-        return plot_rules_violations(self, start, end, last_n, rules, n_cols)
+        return plot_rules_violations(self, start, end, last_n, rules, n_cols, show_spec)
