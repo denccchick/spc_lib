@@ -301,3 +301,176 @@ def plot_rules_violations(chart, start=None, end=None, last_n=30, rules=None, n_
     )
 
     return fig
+
+def plot_cusum_chart(chart, start=None, end=None, last_n=30, show_spec=False):
+    """
+    Специализированная визуализация для CUSUM карты.
+    Отображает верхнюю и нижнюю кумулятивные суммы.
+    """
+    dates = np.asarray(chart.datetimes)
+
+    if start is not None:
+        mask = dates >= np.datetime64(start)
+    elif end is not None:
+        mask = dates <= np.datetime64(end)
+    else:
+        mask = np.arange(len(dates)) >= (len(dates) - last_n)
+
+    cusum_upper = np.asarray(chart.cusum_upper)[mask]
+    cusum_lower = np.asarray(chart.cusum_lower)[mask]
+    dates_plot = dates[mask]
+
+    fig = make_subplots(rows=2, cols=1,
+                        subplot_titles=("Верхняя CUSUM (C+)", "Нижняя CUSUM (C-)"),
+                        vertical_spacing=0.15)
+
+    # Верхняя CUSUM
+    fig.add_trace(go.Scatter(
+        x=dates_plot, y=cusum_upper, mode='lines+markers',
+        line=dict(color=COLOR_MAIN, width=2.5),
+        marker=dict(color=COLOR_MAIN, size=8),
+        name="C+"
+    ), row=1, col=1)
+
+    # Граница для верхней
+    fig.add_trace(go.Scatter(
+        x=dates_plot, y=[chart.ucl_main] * len(dates_plot),
+        mode="lines",
+        line=dict(color=COLOR_RED, width=2, dash='dash'),
+        name=f"UCL = {chart.ucl_main:.3f}"
+    ), row=1, col=1)
+
+    # Нижняя CUSUM
+    fig.add_trace(go.Scatter(
+        x=dates_plot, y=cusum_lower, mode='lines+markers',
+        line=dict(color="#FF6B00", width=2.5),
+        marker=dict(color="#FF6B00", size=8),
+        name="C-"
+    ), row=2, col=1)
+
+    # Граница для нижней
+    fig.add_trace(go.Scatter(
+        x=dates_plot, y=[chart.lcl_main] * len(dates_plot),
+        mode="lines",
+        line=dict(color=COLOR_RED, width=2, dash='dash'),
+        name=f"UCL = {chart.lcl_main:.3f}"
+    ), row=2, col=1)
+
+    fig.update_layout(
+        height=700,
+        title=dict(
+            text=f"<b>CUSUM контрольная карта</b><br>"
+                 f"<span style='font-size:14px;color:#666;'>"
+                 f"λ={chart.k}, h={chart.h}, σ={chart.sigma_est:.4f}"
+                 f"</span>",
+            x=0.5
+        ),
+        plot_bgcolor='white', paper_bgcolor='white',
+        hovermode='x unified',
+        showlegend=True
+    )
+
+    fig.update_xaxes(showgrid=False, zeroline=False, showline=True, linecolor="#E0E0E0")
+    fig.update_yaxes(showgrid=True, gridcolor="#F5F5F5", gridwidth=1, zeroline=True, zerolinecolor="#E0E0E0")
+
+    return fig
+
+
+def plot_ewma_chart(chart, start=None, end=None, last_n=30, show_spec=False):
+    """
+    Специализированная визуализация для EWMA карты.
+    """
+    dates = np.asarray(chart.datetimes)
+
+    if start is not None:
+        mask = dates >= np.datetime64(start)
+    elif end is not None:
+        mask = dates <= np.datetime64(end)
+    else:
+        mask = np.arange(len(dates)) >= (len(dates) - last_n)
+
+    ewma_values = np.asarray(chart.stat_main)[mask]
+    ewma_sigma = np.asarray(chart.ewma_sigma)[mask]
+    dates_plot = dates[mask]
+
+    fig = go.Figure()
+
+    # UCL и LCL
+    ucl_values = chart.ucl_main if isinstance(chart.ucl_main, (int, float)) else chart.ucl_main[mask]
+    lcl_values = chart.lcl_main if isinstance(chart.lcl_main, (int, float)) else chart.lcl_main[mask]
+
+    if isinstance(ucl_values, np.ndarray):
+        fig.add_trace(go.Scatter(
+            x=dates_plot, y=ucl_values, mode="lines",
+            line=dict(color=COLOR_RED, width=2, dash='dash'),
+            name="UCL"
+        ))
+        fig.add_trace(go.Scatter(
+            x=dates_plot, y=lcl_values, mode="lines",
+            line=dict(color=COLOR_RED, width=2, dash='dash'),
+            name="LCL"
+        ))
+    else:
+        fig.add_trace(go.Scatter(
+            x=dates_plot, y=[ucl_values] * len(dates_plot), mode="lines",
+            line=dict(color=COLOR_RED, width=2, dash='dash'),
+            name="UCL"
+        ))
+        fig.add_trace(go.Scatter(
+            x=dates_plot, y=[lcl_values] * len(dates_plot), mode="lines",
+            line=dict(color=COLOR_RED, width=2, dash='dash'),
+            name="LCL"
+        ))
+
+    # CL
+    cl_value = chart.cl_main
+    fig.add_trace(go.Scatter(
+        x=dates_plot, y=[cl_value] * len(dates_plot), mode="lines",
+        line=dict(color=COLOR_CL, width=2, dash='dot'),
+        name="CL"
+    ))
+
+    # Target (если задан)
+    if chart.target is not None and chart.target != cl_value:
+        fig.add_trace(go.Scatter(
+            x=dates_plot, y=[chart.target] * len(dates_plot), mode="lines",
+            line=dict(color=COLOR_TARGET, width=1.5, dash='dot'),
+            name="Target"
+        ))
+
+    # EWMA значения
+    # Отмечаем точки за пределами границ
+    violations = np.zeros(len(ewma_values), dtype=bool)
+    if isinstance(ucl_values, np.ndarray):
+        violations = (ewma_values > ucl_values) | (ewma_values < lcl_values)
+    else:
+        violations = (ewma_values > ucl_values) | (ewma_values < lcl_values)
+
+    marker_colors = np.where(violations, COLOR_RED, COLOR_MAIN)
+    marker_sizes = np.where(violations, 14, 10)
+
+    fig.add_trace(go.Scatter(
+        x=dates_plot, y=ewma_values, mode='lines+markers',
+        line=dict(color=COLOR_MAIN, width=3.5),
+        marker=dict(color=marker_colors, size=marker_sizes, line=dict(color='white', width=2)),
+        name="EWMA"
+    ))
+
+    fig.update_layout(
+        height=450,
+        title=dict(
+            text=f"<b>EWMA контрольная карта</b><br>"
+                 f"<span style='font-size:14px;color:#666;'>"
+                 f"λ={chart.lambda_}, L={chart.L}, σ={chart.sigma_est:.4f}"
+                 f"</span>",
+            x=0.5
+        ),
+        plot_bgcolor='white', paper_bgcolor='white',
+        hovermode='x unified',
+        margin=dict(l=60, r=30, t=70, b=50),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    fig.update_xaxes(showgrid=False, zeroline=False, showline=True, linecolor="#E0E0E0")
+    fig.update_yaxes(showgrid=True, gridcolor="#F5F5F5", gridwidth=1, zeroline=False, showline=True, linecolor="#E0E0E0")
+
+    return fig
