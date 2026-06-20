@@ -4,23 +4,24 @@ from spc_lib.core.base_chart import BaseControlChart
 class PChart(BaseControlChart):
     """
     p-карта (контрольная карта доли дефектных изделий).
-
-    Используется для мониторинга доли несоответствующих единиц продукции
-    в выборке переменного или постоянного объема.
     """
-
     def __init__(self, data, n_fixed=None, datetimes=None, target=None, usl=None, lsl=None):
         super().__init__(data, datetimes, target, usl, lsl)
         self.n_fixed = n_fixed
         self.main_label = "p-карта: Доля дефектных единиц"
-        self.disp_label = None  # Для атрибутивных карт нет графика дисперсии
+        self.disp_label = None
 
         self.p_values = None
         self.n_values = None
         self.p_bar = None
         self.n_bar = None
 
-    def fit(self, baseline_mask=None, method='classic'):
+    def fit(self, baseline_mask=None, method='classic', use_average_n=False):
+        """
+        use_average_n: bool
+            Если True, для переменного размера выборки будут вычислены
+            константные (прямые) границы на основе среднего размера выборки (n_bar).
+        """
         if baseline_mask is None:
             baseline_mask = np.ones(self.n_subgroups, dtype=bool)
 
@@ -35,7 +36,7 @@ class PChart(BaseControlChart):
                 self.p_values = self.data[:, 0] / self.data[:, 1]
                 self.n_values = self.data[:, 1]
             else:
-                raise ValueError("При переменном объеме выборки data должно быть 2D массивом с двумя столбцами: [x, n]")
+                raise ValueError("При переменном объеме выборки data должно быть 2D массивом: [x, n]")
 
         base_p = self.p_values[baseline_mask]
         base_n = self.n_values[baseline_mask]
@@ -52,13 +53,16 @@ class PChart(BaseControlChart):
         if method == 'classic':
             self.cl_main = self.p_bar
 
-            if self.n_fixed is not None:
-                sigma_p = np.sqrt(self.p_bar * (1 - self.p_bar) / self.n_fixed)
+            # --- ИЗМЕНЕНИЕ ЗДЕСЬ ---
+            # Если n_fixed задан ИЛИ пользователь попросил усредненные границы
+            if self.n_fixed is not None or use_average_n:
+                n_eval = self.n_fixed if self.n_fixed is not None else self.n_bar
+
+                sigma_p = np.sqrt(self.p_bar * (1 - self.p_bar) / n_eval)
                 self.ucl_main = self.p_bar + 3 * sigma_p
-                # LCL не может быть меньше 0
                 self.lcl_main = max(0, self.p_bar - 3 * sigma_p)
             else:
-                # Массивы пределов для переменного размера выборки
+                # Переменные (ступенчатые) границы
                 self.ucl_main = np.zeros(len(self.p_values))
                 self.lcl_main = np.zeros(len(self.p_values))
 
@@ -85,7 +89,6 @@ class PChart(BaseControlChart):
         self.lcl_disp = None
 
         return self
-
 
 class CChart(BaseControlChart):
     """
