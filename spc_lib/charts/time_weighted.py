@@ -279,3 +279,134 @@ class EWMAChart(BaseControlChart):
     def get_ewma_values(self):
         """Возвращает EWMA значения и их стандартные отклонения"""
         return self.ewma_values, self.ewma_sigma
+
+class CUSUMVarianceChart(BaseControlChart):
+    """
+    CUSUM карта для контроля дисперсии/стандартного отклонения.
+    Использует преобразование Хокинса для мониторинга вариабельности процесса.
+
+    Параметры:
+    ----------
+    data : array-like
+        Данные подгрупп (2D массив) или индивидуальные значения (1D)
+    datetimes : array-like, optional
+        Временные метки
+    target_mean : float, optional
+        Целевое среднее процесса. Если None - оценивается из данных.
+    target_std : float, optional
+        Целевое стандартное отклонение. Если None - оценивается из данных.
+    usl, lsl : float, optional
+        Верхняя/нижняя границы спецификации
+    h : float, default=5
+        Параметр принятия решения
+    k : float, default=0.5
+        Параметр ссылочного значения
+    """
+
+    def __init__(self, data, datetimes=None, target_mean=None, target_std=None,
+                 usl=None, lsl=None, h=5.0, k=0.5):
+        super().__init__(data, datetimes, None, usl, lsl)  # target передаем как None, используем target_mean
+        self.target_mean = target_mean
+        self.target_std = target_std
+        self.h = h
+        self.k = k
+        self.main_label = "CUSUM для дисперсии (верхняя/нижняя)"
+        self.disp_label = None
+
+        self.cusum_upper = None
+        self.cusum_lower = None
+        self.v_values = None  # Преобразованные значения v_i
+        self.sigma_est = None
+
+    def fit(self, baseline_mask=None, method='classic'):
+        """
+        Методы:
+        - 'classic': стандартный CUSUM для дисперсии с преобразованием Хокинса
+        - 'percentiles': эмпирические пределы на основе процентилей
+        """
+        if baseline_mask is None:
+            baseline_mask = np.ones(self.n_subgroups, dtype=bool)
+
+        # Извлечение данных
+        if self.data.ndim == 2:
+            if self.subgroup_size == 1:
+                x = self.data.flatten()
+                n = 1
+            else:
+                x = np.mean(self.data, axis=1)
+                n = self.subgroup_size
+        else:
+            warnings.warn(
+                "Передан 1D массив. Рекомендуется использовать 2D формат: data.reshape(-1, 1)",
+                UserWarning
+            )
+            x = self.data
+            n = 1
+
+        base_x = x[baseline_mask]
+
+        # Оценка среднего и стандартного отклонения
+        if self.target_mean is not None:
+            mu = self.target_mean
+        elif method == 'classic':
+            mu = np.mean(base_x)
+        else:
+            mu = np.median(base_x)
+
+        if self.target_std is not None:
+            sigma = self.target_std
+        elif method == 'classic' and n > 1:
+            r = np.ptp(self.data[baseline_mask], axis=1)
+            d2 = {2: 1.128, 3: 1.693, 4: 2.059, 5: 2.326,
+                  6: 2.534, 7: 2.704, 8: 2.847, 9: 2.970, 10: 3.078}
+            sigma = np.mean(r) / d2.get(n, 1.128)
+        else:
+            sigma = np.std(base_x, ddof=1)
+
+        # Стандартизованные значения
+        if sigma > 0:
+            y = (x - mu) / sigma
+        else:
+            y = x - mu
+            warnings.warn("Сигма равна 0, используется ненормированная статистика", UserWarning)
+
+        # Преобразование Хокинса для мониторинга дисперсии
+        # v_i = (sqrt(|y_i|) - 0.822) / 0.349
+        # При нормальном распределении v_i ~ N(0,1)
+        self.v_values = (np.sqrt(np.abs(y)) - 0.822) / 0.349
+
+        self.cusum_upper = np.zeros(len(x))
+        self.cusum_lower = np.zeros(len(x))
+
+        if method == 'classic':
+            # Стандартный CUSUM для v_i
+            for i in range(1, len(x)):
+                self.cusum_upper[i] = max(0, self.cusum_upper[i-1] + self.v_values[i] - self.k)
+                self.cusum_lower[i] = max(0, self.cusum_lower[i-1] - self.k - self.v_values[i])
+
+            self.cl_main = 0
+            self.ucl_main = self.h
+            self.lcl_main = self.h
+
+        elif method == 'percentiles':
+            for i in range(1, len(x)):
+                self.cusum_upper[i] = max(0, self.cusum_upper[i-1] + self.v_values[i])
+                self.cusum_lower[i] = max(0, self.cusum_lower[i-1] - self.v_values[i])
+
+            base_cusum_upper = self.cusum_upper[baseline_mask]
+            base_cusum_lower = self.cusum_lower[baseline_mask]
+
+            self.cl_main = 0
+            self.ucl_main = np.percentile(base_cusum_upper, 99.865)
+            self.lcl_main = np.percentile(base_cusum_lower, 99.865)
+
+        else:
+            raise ValueError(f"Неизвестный метод: {method}")
+
+        self.target = mu  # Для совместимости с базовым классом
+        self.target_mean = mu
+        self.target_std = sigma
+        self.sigma_est = sigma
+        self.stat_main = x  # Исходные данные для справки
+
+        return self
