@@ -33,23 +33,37 @@ def _plot_single_chart(dates, stats, ucl, cl, lcl, title, target=None, usl=None,
     stats = stats[valid]
     dates = dates[valid]
 
-    violations = (stats > ucl) | (stats < lcl)
+    # Обработка динамических пределов (например, для p-карты с переменным n)
+    is_ucl_array = isinstance(ucl, np.ndarray) or isinstance(ucl, list)
+    is_lcl_array = isinstance(lcl, np.ndarray) or isinstance(lcl, list)
+
+    ucl_plot = ucl[valid] if is_ucl_array else [ucl] * len(dates)
+    lcl_plot = lcl[valid] if is_lcl_array else [lcl] * len(dates)
+
+    # Поиск нарушений
+    violations = np.zeros(len(stats), dtype=bool)
+    if is_ucl_array:
+        violations = (stats > ucl_plot) | (stats < lcl_plot)
+    else:
+        violations = (stats > ucl) | (stats < lcl)
 
     marker_colors = np.where(violations, COLOR_RED, COLOR_MAIN)
     marker_sizes = np.where(violations, 14, 10)
 
     fig = go.Figure()
 
-    # UCL
+    # UCL (может быть ступенчатой линией)
     fig.add_trace(go.Scatter(
-        x=dates, y=[ucl] * len(dates), mode="lines",
-        line=dict(color=COLOR_RED, width=2.5), showlegend=False, hoverinfo='skip'
+        x=dates, y=ucl_plot, mode="lines",
+        line=dict(color=COLOR_RED, width=2.5, shape='hv' if is_ucl_array else 'linear'),
+        showlegend=False, hoverinfo='skip'
     ))
 
-    # LCL
+    # LCL (может быть ступенчатой линией)
     fig.add_trace(go.Scatter(
-        x=dates, y=[lcl] * len(dates), mode="lines",
-        line=dict(color=COLOR_RED, width=2.5), showlegend=False, hoverinfo='skip'
+        x=dates, y=lcl_plot, mode="lines",
+        line=dict(color=COLOR_RED, width=2.5, shape='hv' if is_lcl_array else 'linear'),
+        showlegend=False, hoverinfo='skip'
     ))
 
     # CL
@@ -113,6 +127,7 @@ def plot_control_chart(chart, start=None, end=None, last_n=30, show_spec=False):
     else:
         mask = np.arange(len(dates)) >= (len(dates) - last_n)
 
+    # 1. Строим главный график
     fig_main = _plot_single_chart(
         dates[mask],
         np.asarray(chart.stat_main)[mask],
@@ -124,9 +139,11 @@ def plot_control_chart(chart, start=None, end=None, last_n=30, show_spec=False):
         show_spec=show_spec
     )
 
+    # 2. Если нет статистики разброса (как в p-chart или c-chart), возвращаем только 1 график
     if chart.stat_disp is None:
         return fig_main
 
+    # 3. Строим график дисперсии (если он есть, например Xbar-R)
     fig_disp = _plot_single_chart(
         dates[mask],
         np.asarray(chart.stat_disp)[mask],
